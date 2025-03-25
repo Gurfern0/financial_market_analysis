@@ -1,8 +1,7 @@
 -- Advanced Market Sentiment Analysis and Trading Pattern Recognition
 -- This query demonstrates complex aggregations, pattern matching, and sentiment analysis
 
--- Create a function for calculating sentiment momentum
-DELIMITER //
+//
 CREATE FUNCTION calculate_sentiment_momentum(
     symbol VARCHAR(10),
     period INT,
@@ -28,7 +27,7 @@ BEGIN
     -- Calculate momentum
     RETURN (current_sentiment - previous_sentiment) / period;
 END //
-DELIMITER ;
+ ;
 
 -- Main analysis query
 WITH sentiment_analysis AS (

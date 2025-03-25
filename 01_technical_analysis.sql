@@ -2,7 +2,7 @@
 -- This query demonstrates complex window functions, recursive CTEs, and custom calculations
 
 -- First, create a function for calculating RSI
-DELIMITER //
+ //
 CREATE FUNCTION calculate_rsi(
     symbol VARCHAR(10),
     period INT,
@@ -30,7 +30,7 @@ BEGIN
     -- Calculate RSI
     RETURN 100 - (100 / (1 + (avg_gain / avg_loss)));
 END //
-DELIMITER ;
+ ;
 
 -- Main analysis query
 WITH price_changes AS (

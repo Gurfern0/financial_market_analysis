@@ -1,10 +1,11 @@
 -- Advanced Technical Analysis and Pattern Recognition
 -- This query demonstrates complex window functions, recursive CTEs, and custom calculations
 
--- First, create a function for calculating RSI
- //
+-- Create a function for calculating RSI
+DELIMITER //
+
 CREATE FUNCTION calculate_rsi(
-    symbol VARCHAR(10),
+    stock_symbol VARCHAR(10),
     period INT,
     start_date DATE,
     end_date DATE
@@ -21,16 +22,21 @@ BEGIN
     INTO avg_gain, avg_loss
     FROM (
         SELECT 
-            close_price - LAG(close_price) OVER (ORDER BY date) as price_change
+            close_price - LAG(close_price) OVER (PARTITION BY symbol ORDER BY date) as price_change
         FROM stock_prices
-        WHERE symbol = symbol
+        WHERE symbol = stock_symbol
         AND date BETWEEN start_date AND end_date
-    ) price_changes;
+    ) as price_changes;
     
-    -- Calculate RSI
-    RETURN 100 - (100 / (1 + (avg_gain / avg_loss)));
+    -- Avoid division by zero
+    IF avg_loss = 0 THEN
+        RETURN 100;
+    ELSE
+        RETURN 100 - (100 / (1 + (avg_gain / avg_loss)));
+    END IF;
 END //
- ;
+
+DELIMITER ;
 
 -- Main analysis query
 WITH price_changes AS (
@@ -41,7 +47,7 @@ WITH price_changes AS (
         close_price,
         LAG(close_price) OVER (PARTITION BY symbol ORDER BY date) as prev_close,
         (close_price - LAG(close_price) OVER (PARTITION BY symbol ORDER BY date)) / 
-        LAG(close_price) OVER (PARTITION BY symbol ORDER BY date) as daily_return,
+        NULLIF(LAG(close_price) OVER (PARTITION BY symbol ORDER BY date), 0) as daily_return,
         volume,
         LAG(volume) OVER (PARTITION BY symbol ORDER BY date) as prev_volume
     FROM stock_prices
@@ -49,7 +55,7 @@ WITH price_changes AS (
 ),
 
 moving_averages AS (
-    -- Calculate various moving averages
+    -- Calculate moving averages
     SELECT 
         symbol,
         date,
@@ -113,7 +119,7 @@ volume_analysis AS (
 
 support_resistance AS (
     -- Identify support and resistance levels using recursive CTE
-    WITH RECURSIVE price_levels AS (
+    WITH price_levels AS (
         SELECT 
             symbol,
             date,
@@ -122,31 +128,18 @@ support_resistance AS (
             LAG(close_price) OVER (PARTITION BY symbol ORDER BY date) as prev_price,
             LEAD(close_price) OVER (PARTITION BY symbol ORDER BY date) as next_price
         FROM price_changes
-    ),
-    levels AS (
-        SELECT 
-            symbol,
-            date,
-            close_price,
-            row_num,
-            prev_price,
-            next_price,
-            CASE 
-                WHEN close_price > prev_price AND close_price > next_price THEN 'Resistance'
-                WHEN close_price < prev_price AND close_price < next_price THEN 'Support'
-                ELSE NULL
-            END as level_type
-        FROM price_levels
-        WHERE row_num > 1
     )
     SELECT 
         symbol,
         date,
         close_price,
-        level_type,
-        COUNT(*) OVER (PARTITION BY symbol, level_type) as level_strength
-    FROM levels
-    WHERE level_type IS NOT NULL
+        CASE 
+            WHEN close_price > prev_price AND close_price > next_price THEN 'Resistance'
+            WHEN close_price < prev_price AND close_price < next_price THEN 'Support'
+            ELSE NULL
+        END as level_type
+    FROM price_levels
+    WHERE prev_price IS NOT NULL AND next_price IS NOT NULL
 )
 
 -- Final comprehensive technical analysis
@@ -163,30 +156,7 @@ SELECT
     -- Volume analysis
     va.volume_pattern,
     va.volume as current_volume,
-    va.volume_sma as avg_volume,
-    -- Support/Resistance
-    sr.level_type as price_level,
-    sr.level_strength,
-    -- Calculate technical signals
-    CASE 
-        WHEN bb.close_price > bb.upper_band THEN 'Overbought'
-        WHEN bb.close_price < bb.lower_band THEN 'Oversold'
-        ELSE 'Neutral'
-    END as bollinger_signal,
-    CASE 
-        WHEN bb.sma_20 > bb.sma_50 THEN 'Bullish'
-        WHEN bb.sma_20 < bb.sma_50 THEN 'Bearish'
-        ELSE 'Neutral'
-    END as trend_signal,
-    -- Calculate volatility
-    (bb.upper_band - bb.lower_band) / bb.sma_20 as volatility_ratio,
-    -- Calculate RSI
-    calculate_rsi(bb.symbol, 14, DATE_SUB(bb.date, INTERVAL 30 DAY), bb.date) as rsi
-FROM bollinger_bands bb
-JOIN volume_analysis va USING (symbol, date)
-LEFT JOIN support_resistance sr USING (symbol, date)
-WHERE bb.date >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
-ORDER BY bb.symbol, bb.date;
+    va.volume_sma 
 
 -- Performance Notes:
 -- 1. This query uses multiple CTEs for better organization and readability

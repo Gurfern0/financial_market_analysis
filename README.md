@@ -1,4 +1,4 @@
-# **Financial Market Analysis **  
+# **Financial Market Analysis**  
 
 This project uses **MySQL** to analyze financial market data, helping uncover **stock trends, trading patterns, and market sentiment**. The SQL code processes stock prices, trading volumes, and technical indicators to identify **market movements, risk factors, and potential trading opportunities**.  
 
